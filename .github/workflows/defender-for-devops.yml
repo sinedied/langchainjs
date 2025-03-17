@@ -25,6 +25,7 @@ on:
     branches: [ "security" ]
   schedule:
     - cron: '32 14 * * 0'
+  workflow_dispatch:
 
 jobs:
   MSDO:
