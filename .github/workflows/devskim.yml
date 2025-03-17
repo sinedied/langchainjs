@@ -12,6 +12,7 @@ on:
     branches: [ "security" ]
   schedule:
     - cron: '31 14 * * 4'
+  workflow_dispatch:
 
 jobs:
   lint:
