@@ -3,4 +3,6 @@ queries:
   - uses: security-extended
 paths-ignore:
   - '/release_workspace.js'
+  - '**/create-entrypoints.js'
   - '**/*.test.ts'
+  - examples/**/*.ts'
