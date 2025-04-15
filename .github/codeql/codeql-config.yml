@@ -5,4 +5,5 @@ paths-ignore:
   - '/release_workspace.js'
   - '**/create-entrypoints.js'
   - '**/*.test.ts'
-  - examples/**/*.ts'
+  - 'examples/**/*.ts'
+  - '**/tests/**/*.ts'
