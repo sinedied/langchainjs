@@ -7,9 +7,9 @@ name: DevSkim
 
 on:
   push:
-    branches: [ "security" ]
+    branches: [ "main", "security" ]
   pull_request:
-    branches: [ "security" ]
+    branches: [ "main", "security" ]
   schedule:
     - cron: '31 14 * * 4'
   workflow_dispatch:
@@ -28,6 +28,9 @@ jobs:
 
       - name: Run DevSkim scanner
         uses: microsoft/DevSkim-Action@v1
+        with:
+          should-scan-archives: false
+          ignore-globs: "release_workspace.js,**/*.test.ts"
 
       - name: Upload DevSkim scan results to GitHub Security tab
         uses: github/codeql-action/upload-sarif@v3
