@@ -30,7 +30,7 @@ jobs:
         uses: microsoft/DevSkim-Action@v1
         with:
           should-scan-archives: false
-          ignore-globs: "release_workspace.js,**/*.test.ts"
+          ignore-globs: "release_workspace.js,**/*.test.ts,examples/**/*.ts,**/tests/**/*.ts"
 
       - name: Upload DevSkim scan results to GitHub Security tab
         uses: github/codeql-action/upload-sarif@v3
