@@ -32,6 +32,7 @@ jobs:
       with:
         languages: ${{ matrix.language }}
         config-file: ./.github/codeql/codeql-config.yml
+        output: results-${{matrix.language}}
 
     - name: Perform CodeQL Analysis
       uses: github/codeql-action/analyze@v3
@@ -42,4 +43,4 @@ jobs:
       uses: actions/upload-artifact@v4
       with:
         name: codeql-results-${{matrix.language}}
-        path: ../results
+        path: results-${{matrix.language}}
