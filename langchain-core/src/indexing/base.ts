@@ -1,7 +1,7 @@
 import { v5 as uuidv5 } from "uuid";
 import { VectorStore } from "../vectorstores.js";
 import { RecordManagerInterface, UUIDV5_NAMESPACE } from "./record_manager.js";
-import { insecureHash } from "../utils/hash.js";
+import { secureHash } from "../utils/hash.js";
 import { DocumentInterface, Document } from "../documents/document.js";
 import { BaseDocumentLoader } from "../document_loaders/base.js";
 
@@ -110,13 +110,13 @@ export class _HashedDocument implements HashedDocumentInterface {
   }
 
   private _hashStringToUUID(inputString: string): string {
-    const hash_value = insecureHash(inputString);
+    const hash_value = secureHash(inputString);
     return uuidv5(hash_value, UUIDV5_NAMESPACE);
   }
 
   private _hashNestedDictToUUID(data: Record<string, unknown>): string {
     const serialized_data = JSON.stringify(data, Object.keys(data).sort());
-    const hash_value = insecureHash(serialized_data);
+    const hash_value = secureHash(serialized_data);
     return uuidv5(hash_value, UUIDV5_NAMESPACE);
   }
 }

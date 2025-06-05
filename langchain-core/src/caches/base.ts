@@ -1,4 +1,4 @@
-import { insecureHash } from "../utils/hash.js";
+import { secureHash, insecureHash } from "../utils/hash.js";
 import type { Generation, ChatGeneration } from "../outputs.js";
 import { mapStoredMessageToChatMessage } from "../messages/utils.js";
 import { type StoredGeneration } from "../messages/base.js";
@@ -14,6 +14,15 @@ import { type StoredGeneration } from "../messages/base.js";
  * TODO: Make cache key consistent across versions of LangChain.
  */
 export const getCacheKey = (...strings: string[]): string =>
+  secureHash(strings.join("_"));
+
+/**
+ * Legacy cache key function for backward compatibility.
+ * This uses the old hash function (now also SHA3 for security).
+ * 
+ * @deprecated Use getCacheKey instead which uses secure hashing.
+ */
+export const getLegacyCacheKey = (...strings: string[]): string =>
   insecureHash(strings.join("_"));
 
 export function deserializeStoredGeneration(
