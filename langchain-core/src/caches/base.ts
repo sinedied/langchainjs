@@ -78,7 +78,26 @@ export class InMemoryCache<T = Generation[]> extends BaseCache<T> {
    * @returns The data corresponding to the prompt and LLM key, or null if not found.
    */
   lookup(prompt: string, llmKey: string): Promise<T | null> {
-    return Promise.resolve(this.cache.get(getCacheKey(prompt, llmKey)) ?? null);
+    // Try new SHA3-based cache key first
+    const newCacheKey = getCacheKey(prompt, llmKey);
+    let result = this.cache.get(newCacheKey);
+    
+    if (result !== undefined) {
+      return Promise.resolve(result);
+    }
+    
+    // Fallback to legacy SHA1-based cache key for backward compatibility
+    const legacyCacheKey = getLegacyCacheKey(prompt, llmKey);
+    result = this.cache.get(legacyCacheKey);
+    
+    // If found in legacy cache, migrate to new cache key
+    if (result !== undefined) {
+      this.cache.set(newCacheKey, result);
+      // Optionally remove the old key to clean up
+      this.cache.delete(legacyCacheKey);
+    }
+    
+    return Promise.resolve(result ?? null);
   }
 
   /**
@@ -88,6 +107,7 @@ export class InMemoryCache<T = Generation[]> extends BaseCache<T> {
    * @param value The data to be stored.
    */
   async update(prompt: string, llmKey: string, value: T): Promise<void> {
+    // Always use the new secure cache key for storing
     this.cache.set(getCacheKey(prompt, llmKey), value);
   }
 
