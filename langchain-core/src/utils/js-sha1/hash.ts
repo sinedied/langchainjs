@@ -413,5 +413,8 @@ Sha1.prototype.arrayBuffer = function () {
 };
 
 export const insecureHash = (message) => {
+  if (typeof console !== 'undefined' && console.warn) {
+    console.warn('DEPRECATION WARNING: insecureHash (SHA1) is deprecated. Use secureHash (SHA3) instead for new code.');
+  }
   return new Sha1(true).update(message)["hex"]();
 };

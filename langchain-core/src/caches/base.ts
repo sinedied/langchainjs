@@ -1,4 +1,4 @@
-import { insecureHash } from "../utils/hash.js";
+import { secureHash, insecureHash } from "../utils/hash.js";
 import type { Generation, ChatGeneration } from "../outputs.js";
 import { mapStoredMessageToChatMessage } from "../messages/utils.js";
 import { type StoredGeneration } from "../messages/base.js";
@@ -14,6 +14,15 @@ import { type StoredGeneration } from "../messages/base.js";
  * TODO: Make cache key consistent across versions of LangChain.
  */
 export const getCacheKey = (...strings: string[]): string =>
+  secureHash(strings.join("_"));
+
+/**
+ * Legacy cache key function for backward compatibility.
+ * This uses the old hash function (now also SHA3 for security).
+ * 
+ * @deprecated Use getCacheKey instead which uses secure hashing.
+ */
+export const getLegacyCacheKey = (...strings: string[]): string =>
   insecureHash(strings.join("_"));
 
 export function deserializeStoredGeneration(
@@ -69,7 +78,26 @@ export class InMemoryCache<T = Generation[]> extends BaseCache<T> {
    * @returns The data corresponding to the prompt and LLM key, or null if not found.
    */
   lookup(prompt: string, llmKey: string): Promise<T | null> {
-    return Promise.resolve(this.cache.get(getCacheKey(prompt, llmKey)) ?? null);
+    // Try new SHA3-based cache key first
+    const newCacheKey = getCacheKey(prompt, llmKey);
+    let result = this.cache.get(newCacheKey);
+    
+    if (result !== undefined) {
+      return Promise.resolve(result);
+    }
+    
+    // Fallback to legacy SHA1-based cache key for backward compatibility
+    const legacyCacheKey = getLegacyCacheKey(prompt, llmKey);
+    result = this.cache.get(legacyCacheKey);
+    
+    // If found in legacy cache, migrate to new cache key
+    if (result !== undefined) {
+      this.cache.set(newCacheKey, result);
+      // Optionally remove the old key to clean up
+      this.cache.delete(legacyCacheKey);
+    }
+    
+    return Promise.resolve(result ?? null);
   }
 
   /**
@@ -79,6 +107,7 @@ export class InMemoryCache<T = Generation[]> extends BaseCache<T> {
    * @param value The data to be stored.
    */
   async update(prompt: string, llmKey: string, value: T): Promise<void> {
+    // Always use the new secure cache key for storing
     this.cache.set(getCacheKey(prompt, llmKey), value);
   }
 

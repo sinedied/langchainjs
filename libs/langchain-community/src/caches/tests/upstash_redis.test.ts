@@ -1,10 +1,10 @@
 import { test, expect, jest } from "@jest/globals";
-import { insecureHash } from "@langchain/core/utils/hash";
+import { secureHash } from "@langchain/core/utils/hash";
 import { StoredGeneration } from "@langchain/core/messages";
 
 import { UpstashRedisCache } from "../upstash_redis.js";
 
-const sha1 = (str: string) => insecureHash(str);
+const sha1 = (str: string) => secureHash(str);
 
 test("UpstashRedisCache", async () => {
   const redis = {

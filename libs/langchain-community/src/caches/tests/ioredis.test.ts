@@ -1,9 +1,9 @@
 import { test, expect, jest } from "@jest/globals";
-import { insecureHash } from "@langchain/core/utils/hash";
+import { secureHash } from "@langchain/core/utils/hash";
 
 import { RedisCache } from "../ioredis.js";
 
-const sha1 = (str: string) => insecureHash(str);
+const sha1 = (str: string) => secureHash(str);
 
 test("RedisCache", async () => {
   const redis = {
