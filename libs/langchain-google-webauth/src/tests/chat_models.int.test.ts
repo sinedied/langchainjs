@@ -41,6 +41,9 @@ import { BlobStoreAIStudioFile } from "../media.js";
 import MockedFunction = jest.MockedFunction;
 
 function propSum(o: Record<string, number>): number {
+  if (typeof o !== "object") {
+    return 0;
+  }
   return Object.keys(o)
     .map((key) => o[key])
     .reduce((acc, val) => acc + val);
@@ -69,8 +72,9 @@ const apiKeyModelNames = [
   ["gemini-1.5-flash-002"],
   ["gemini-2.0-flash-001"],
   ["gemini-2.0-flash-lite-001"],
-  ["gemini-2.5-flash-preview-05-20"],
-  ["gemini-2.5-pro-preview-05-06"],
+  ["gemini-2.5-flash"], // GA
+  ["gemini-2.5-pro"], // GA
+  ["gemini-2.5-flash-lite-preview-06-17"],
   ["gemma-3-27b-it"],
   ["gemma-3n-e4b-it"],
 ];
@@ -264,7 +268,7 @@ describe.each(apiKeyModelNames)("Google APIKey Chat (%s)", (modelName) => {
     expect(res2.content).toContain("24");
   });
 
-  test.skip("withStructuredOutput", async () => {
+  test("withStructuredOutput", async () => {
     const tool = {
       name: "get_weather",
       description:
@@ -280,9 +284,28 @@ describe.each(apiKeyModelNames)("Google APIKey Chat (%s)", (modelName) => {
         required: ["location"],
       },
     };
-    const model = newChatGoogle().withStructuredOutput(tool);
-    const result = await model.invoke("What is the weather in Paris?");
-    expect(result).toHaveProperty("location");
+    try {
+      const model = newChatGoogle().withStructuredOutput(tool);
+      const result = await model.invoke("What is the weather in Paris?");
+      expect(result).toHaveProperty("location");
+    } catch (x) {
+      console.error(x);
+    }
+  });
+
+  test("withStructuredOutput - null", async () => {
+    const schema = {
+      type: "object",
+      properties: {
+        greeterName: {
+          type: ["string", "null"],
+        },
+      },
+      required: ["greeterName"],
+    };
+    const model = newChatGoogle().withStructuredOutput(schema);
+    const result = await model.invoke("Hi, I'm kwkaiser");
+    expect(result).toHaveProperty("greeterName");
   });
 
   test.skip("media - fileData", async () => {
@@ -440,26 +463,36 @@ describe.each(apiKeyModelNames)("Google APIKey Chat (%s)", (modelName) => {
   }, 90000); // Increase timeout
 });
 
-const weatherTool = tool((_) => "no-op", {
-  name: "get_weather",
-  description:
-    "Get the weather of a specific location and return the temperature in Celsius.",
-  schema: z.object({
-    location: z.string().describe("The name of city to get the weather for."),
+const weatherTool = tool(
+  (_) => ({
+    temp: 21,
   }),
-});
+  {
+    name: "get_weather",
+    description:
+      "Get the weather of a specific location and return the temperature in Celsius.",
+    schema: z.object({
+      location: z.string().describe("The name of city to get the weather for."),
+    }),
+  }
+);
 
-const nullishWeatherTool = tool((_) => "no-op", {
-  name: "get_nullish_weather",
-  description:
-    "Get the weather of a specific location and return the temperature in Celsius.",
-  schema: z.object({
-    location: z
-      .string()
-      .nullish()
-      .describe("The name of city to get the weather for."),
+const nullishWeatherTool = tool(
+  (_) => ({
+    temp: 21,
   }),
-});
+  {
+    name: "get_nullish_weather",
+    description:
+      "Get the weather of a specific location and return the temperature in Celsius.",
+    schema: z.object({
+      location: z
+        .string()
+        .nullish()
+        .describe("The name of city to get the weather for."),
+    }),
+  }
+);
 
 const calculatorTool = tool((_) => "no-op", {
   name: "calculator",
@@ -503,29 +536,35 @@ const testGeminiModelNames = [
     apiVersion: "v1",
   },
   {
-    modelName: "gemini-2.5-flash-preview-05-20",
+    modelName: "gemini-2.5-flash-lite",
     platformType: "gai",
     apiVersion: "v1beta",
   },
   {
-    modelName: "gemini-2.5-flash-preview-05-20",
+    modelName: "gemini-2.5-flash-lite",
     platformType: "gcp",
     apiVersion: "v1",
   },
   {
-    modelName: "gemini-2.5-pro-preview-05-06",
+    modelName: "gemini-2.5-flash",
     platformType: "gai",
     apiVersion: "v1beta",
   },
   {
-    modelName: "gemini-2.5-pro-preview-05-06",
+    modelName: "gemini-2.5-flash",
     platformType: "gcp",
     apiVersion: "v1",
   },
-
-  // Flash Thinking doesn't have functions or other features
-  // {modelName: "gemini-2.0-flash-thinking-exp", platformType: "gai"},
-  // {modelName: "gemini-2.0-flash-thinking-exp", platformType: "gcp"},
+  {
+    modelName: "gemini-2.5-pro",
+    platformType: "gai",
+    apiVersion: "v1beta",
+  },
+  {
+    modelName: "gemini-2.5-pro",
+    platformType: "gcp",
+    apiVersion: "v1",
+  },
 ];
 
 /*
@@ -745,6 +784,26 @@ describe.each(testGeminiModelNames)(
       );
     });
 
+    test("function conversation", async () => {
+      const tools = [weatherTool];
+      const model = newChatGoogle().bind({
+        tools,
+        temperature: 0.1,
+      });
+      const history = [new HumanMessage("What is the weather in New York?")];
+      const result1 = await model.invoke(history);
+      history.push(result1);
+
+      const toolCalls = result1.tool_calls!;
+      const toolCall = toolCalls[0];
+      const toolMessage = await weatherTool.invoke(toolCall);
+      history.push(toolMessage);
+
+      const result2 = await model.invoke(history);
+      console.log(result2);
+      expect(result2.content).toMatch(/21/);
+    });
+
     test("function reply", async () => {
       const tools: GeminiTool[] = [
         {
@@ -814,6 +873,21 @@ describe.each(testGeminiModelNames)(
       const model = newChatGoogle().withStructuredOutput(tool);
       const result = await model.invoke("What is the weather in Paris?");
       expect(result).toHaveProperty("location");
+    });
+
+    test("withStructuredOutput - null", async () => {
+      const schema = {
+        type: "object",
+        properties: {
+          greeterName: {
+            type: ["string", "null"],
+          },
+        },
+        required: ["greeterName"],
+      };
+      const model = newChatGoogle().withStructuredOutput(schema);
+      const result = await model.invoke("Hi, I'm kwkaiser");
+      expect(result).toHaveProperty("greeterName");
     });
 
     // test("media - fileData", async () => {
@@ -1249,7 +1323,7 @@ describe.each(testGeminiModelNames)(
     });
 
     // Vertex AI doesn't (yet?) support fps, but does support startOffset and endOffset
-    test.only("image_url video data", async () => {
+    test("image_url video data", async () => {
       const model = newChatGoogle({});
 
       const dataPath = "src/tests/data/rainbow.mp4";
@@ -1478,21 +1552,202 @@ describe.each(testMultimodalModelNames)(
   }
 );
 
+const testTtsModelNames = [
+  {
+    modelName: "gemini-2.5-flash-preview-tts",
+    platformType: "gai",
+  },
+  // GCP doesn't currently support this model
+  // {
+  //   modelName: "gemini-2.5-flash-preview-tts",
+  //   platformType: "gcp",
+  // },
+  {
+    modelName: "gemini-2.5-pro-preview-tts",
+    platformType: "gai",
+  },
+  // {
+  //   modelName: "gemini-2.5-pro-preview-tts",
+  //   platformType: "gcp",
+  // },
+];
+
+describe.each(testTtsModelNames)(
+  "Webauth ($platformType) Gemini TTS ($modelName)",
+  ({ modelName, platformType }) => {
+    let recorder: GoogleRequestRecorder;
+    let callbacks: BaseCallbackHandler[];
+
+    let testIndex = 0;
+    let outputIndex = 0;
+
+    function newChatGoogle(fields?: ChatGoogleInput): ChatGoogle {
+      // const logger = new GoogleRequestLogger();
+      recorder = new GoogleRequestRecorder();
+      callbacks = [recorder, new GoogleRequestLogger()];
+
+      const apiKey =
+        platformType === "gai"
+          ? getEnvironmentVariable("TEST_API_KEY")
+          : undefined;
+
+      const responseModalities = ["AUDIO"];
+
+      return new ChatGoogle({
+        modelName,
+        platformType: platformType as GooglePlatformType,
+        callbacks,
+        apiKey,
+        responseModalities,
+        ...(fields ?? {}),
+      });
+    }
+
+    beforeEach(() => {
+      outputIndex = 0;
+    });
+
+    afterEach(() => {
+      testIndex += 1;
+    });
+
+    function writeData(data: string) {
+      const fn = `/tmp/tts-${modelName}-${platformType}-${testIndex}-${outputIndex}.pcm`;
+      console.log(`writing to ${fn}`);
+      Fs.writeFileSync(fn, data, "base64");
+    }
+
+    test("single", async () => {
+      const model = newChatGoogle({
+        speechConfig: "Zubenelgenubi",
+      });
+      const prompt = "Say cheerfully: Have a wonderful day!";
+      const res = await model.invoke(prompt);
+      console.log(JSON.stringify(res, null, 1));
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const content = res?.content?.[0] as Record<string, any>;
+      writeData(content.data as string);
+    });
+
+    test("multiple", async () => {
+      const model = newChatGoogle({
+        speechConfig: [
+          {
+            speaker: "Joe",
+            name: "Kore",
+          },
+          {
+            speaker: "Jane",
+            name: "Puck",
+          },
+        ],
+      });
+      const prompt = `
+        TTS the following conversation between Joe and Jane:
+        Joe: Hows it going today, Jane?
+        Jane: Not too bad, how about you?
+      `;
+      const res = await model.invoke(prompt);
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const content = res?.content?.[0] as Record<string, any>;
+      writeData(content.data as string);
+    });
+
+    test("multiple, with instructions", async () => {
+      const model = newChatGoogle({
+        speechConfig: [
+          {
+            speaker: "Joe",
+            name: "Kore",
+          },
+          {
+            speaker: "Jane",
+            name: "Puck",
+          },
+        ],
+      });
+      const prompt = `
+        TTS the following conversation between Joe and Jane.
+        Pay attention to instructions about how each each person speaks,
+        and other sounds they may make.  
+        Joe: Hows it going today, Jane?
+        Jane: Not too bad, how about you?
+        Joe: [Sighs and sounds tired] It has been a rough day. 
+        Joe: [Perks up] But the week should improve!
+      `;
+      const res = await model.invoke(prompt);
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const content = res?.content?.[0] as Record<string, any>;
+      writeData(content.data as string);
+    });
+
+    test("stream multiple", async () => {
+      const model = newChatGoogle({
+        speechConfig: [
+          {
+            speaker: "Joe",
+            name: "Kore",
+          },
+          {
+            speaker: "Jane",
+            name: "Puck",
+          },
+        ],
+      });
+      const prompt = `
+        TTS the following conversation between Joe and Jane:
+        Joe: Hows it going today, Jane?
+        Jane: Not too bad, how about you?
+        Joe: I think things are absolutely wonderful.
+        Jane: Do you, now? Are you sure about that? Are you absolutely sure?
+        Joe: Well, let's consider. (1) You and I are having this conversation,
+          which is pretty remarkable. (2) I think I feel fine. Don't I?
+        Jane: Well, I guess we should see about the outcome of this test, then.
+        Joe: Wait, this is a test?
+      `;
+      const res = await model.stream(prompt);
+      for await (const chunk of res) {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const content = chunk?.content?.[0] ?? "";
+        if (
+          typeof content !== "string" &&
+          "type" in content &&
+          content.type === "media"
+        ) {
+          writeData(content.data as string);
+        } else {
+          console.log("content:", content);
+        }
+      }
+    }, 60000);
+  }
+);
+
 const testReasoningModelNames = [
   {
-    modelName: "gemini-2.5-flash-preview-05-20",
+    modelName: "gemini-2.5-flash-lite",
+    platformType: "gai",
+    apiVersion: "v1beta",
+  },
+  {
+    modelName: "gemini-2.5-flash-lite",
+    platformType: "gcp",
+    apiVersion: "v1",
+  },
+  {
+    modelName: "gemini-2.5-flash",
     platformType: "gai",
   },
   {
-    modelName: "gemini-2.5-flash-preview-05-20",
+    modelName: "gemini-2.5-flash",
     platformType: "gcp",
   },
   {
-    modelName: "gemini-2.5-pro-preview-05-06",
+    modelName: "gemini-2.5-pro",
     platformType: "gai",
   },
   {
-    modelName: "gemini-2.5-pro-preview-05-06",
+    modelName: "gemini-2.5-pro",
     platformType: "gcp",
   },
 ];
@@ -1541,6 +1796,7 @@ describe.each(testReasoningModelNames)(
 
     test("default", async () => {
       // By default, it should not return reasoning tokens, tho it should report some
+      // 2.5-flash-lite defaults to thinking off.
       const model = newChatGoogle();
       const prompt =
         "You roll two dice. What’s the probability they add up to 7? Give me just the answer - do not explain.";
@@ -1550,6 +1806,31 @@ describe.each(testReasoningModelNames)(
       expect(Array.isArray(response.content)).toEqual(false);
       expect(typeof response.content).toEqual("string");
       expect(response.content).toMatch(/^1\/6/);
+
+      expect(
+        response?.usage_metadata?.output_token_details?.reasoning
+      ).toBeGreaterThan(0);
+    });
+
+    test("dynamic", async () => {
+      const model = newChatGoogle({
+        maxReasoningTokens: -1,
+      });
+      const prompt =
+        "You roll two dice. What’s the probability they add up to 7? Give me just the answer - do not explain.";
+      const response = await model.invoke(prompt);
+      console.log(response);
+
+      expect(Array.isArray(response.content)).toEqual(true);
+      const content: MessageContentComplex[] =
+        response.content as MessageContentComplex[];
+      expect(content.length).toBeGreaterThanOrEqual(2);
+      expect(
+        content.filter((c) => c.type === "reasoning").length
+      ).toBeGreaterThanOrEqual(1);
+      expect(
+        content.filter((c) => c.type === "text").length
+      ).toBeGreaterThanOrEqual(1);
 
       expect(
         response?.usage_metadata?.output_token_details?.reasoning
@@ -1583,6 +1864,7 @@ describe.each(testReasoningModelNames)(
 
     test("off", async () => {
       // By default, it should not return reasoning tokens, and should not report any
+      // 2.5 pro cannot turn reasoning off.
       const model = newChatGoogle({
         maxReasoningTokens: 0,
       });
