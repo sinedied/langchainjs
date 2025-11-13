@@ -1,168 +1,71 @@
 # LangChain.js
 
+LangChain.js is a framework and ecosystem for building context-aware, LLM-powered applications with composable components, stateful agents, and production tooling.
+
 ## Overview
 
-- Framework for building LLM-powered applications (context-aware + reasoning) in JavaScript/TypeScript.
-- Monorepo containing core abstractions, community integrations, higher-level chains/agents/retrieval strategies, documentation site sources, examples, internal tooling, and auxiliary packages.
-- Primary published packages referenced in this repo:
-  - `@langchain/core`: Base abstractions.
-  - `@langchain/community`: Third-party integrations (under `libs/langchain-community`).
-  - `langchain`: Chains, agents, retrieval strategies, entrypoint map (`langchain/`).
-  - Additional integration-specific packages under `libs/*` (e.g. `@langchain/google-genai`, etc.).
-  - LangGraph (external repo) integrates with these packages; not maintained directly here.
+- Provides composable building blocks, chains, agents, and LangGraph tooling for LLM applications targeting Node.js, edge runtimes, browsers, and Deno
+- Monorepo managed with pnpm and TurboRepo; key workspaces include `@langchain/core` (base abstractions), `langchain` (chains/agents), and numerous provider packages under `libs/providers/` and `libs/langchain-community/`
+- Source lives across `langchain-core/`, `langchain/`, and `libs/*`; examples and notebooks are in `examples/` and `cookbook/`
 
-### Workspace Structure (root `package.json` workspaces)
+## Key Technologies and Frameworks
 
-```
-langchain
-langchain-core
-libs/*                (community + integration packages)
-examples              (runnable usage examples)
-docs/*                (documentation site + API refs)
-internal/*            (supporting scripts/tests/utilities)
-```
-
-### Key Subdirectories
-
-- `langchain/`: Source for `langchain` package (entrypoint definitions in `langchain.config.js`).
-- `langchain-core/`: Core abstractions (referenced by others).
-- `libs/langchain-community/`: Third-party integrations (default location for new integrations).
-- `examples/`: Example scripts, can be invoked via root scripts.
-- `docs/core_docs`, `docs/api_refs`: Documentation generation/rendering workspaces.
-- `environment_tests/`, `dependency_range_tests/`: Docker-based cross-environment & dependency range validation.
-
-## Key Technologies and Tooling
-
-- Language: TypeScript (Node.js >= 18; ESM + CJS build output).
-- Package manager: Yarn 3.5.1 (PnP) (`"packageManager": "yarn@3.5.1"`).
-- Task orchestration & caching: Turborepo (`turbo.json`).
-- Linting: ESLint.
-- Formatting: Prettier.
-- Testing: Jest (unit + integration), plus environment/export tests via Docker.
-- Documentation: TypeDoc (API refs), Docusaurus (site), Quarto (Notebook -> MD conversions), Notebooks (Deno runtime import style).
-- Release tooling: Custom release script (`yarn release`) with Changesets + `release_workspace.js`.
-- Docker: Used for environment tests and some release validation (`test:exports:docker`).
+- TypeScript targeting Node.js v20+ (repo `.nvmrc` pins v24.6.0)
+- pnpm workspaces (`pnpm-workspace.yaml`) with TurboRepo task orchestration (`turbo.json`)
+- Vitest and Jest (via Turbo) for unit and integration testing
+- ESLint and Prettier for linting/formatting
+- Docker Compose for environment and integration test matrices
+- Documentation generation: TypeDoc (API refs) and Docusaurus (site)
 
 ## Constraints and Requirements
 
-- Node.js version: `>=18` (supported: 18.x, 19.x, 20.x, 22.x per README).
-- Maintain API parity (where feasible) with Python LangChain for core abstractions; new abstractions should be discussed first.
-- Monorepo packages rely on consistent entrypoints defined in `langchain/langchain.config.js` (agents, tools, chains, retrievers, etc.). Adding new entrypoints requires editing that config; integration entrypoints needing optional deps must be listed in `requiresOptionalDependency` array.
-- Yarn PnP: Do not rely on `node_modules` resolution hacks; declare dependencies explicitly.
-- Large matrix of optional third-party integrations: Keep integration code in community or dedicated `libs/*` packages; avoid bloating core.
-
-## Entry Points (Excerpt from `langchain/langchain.config.js`)
-
-The `config.entrypoints` map exposes subpath imports (e.g. `langchain/agents`, `langchain/tools/sql`). Optional integrations requiring third-party deps are listed under `config.requiresOptionalDependency` to control export/testing and docs inclusion.
+- Use Node.js ≥20; maintainers develop against Node v24.6.0 (see `.nvmrc`)
+- Prioritize parity with the Python LangChain APIs; propose new abstractions via issues before implementation
+- Optional third-party integrations should live in appropriate `libs/providers/` packages and list optional dependencies in package configs and entrypoint metadata
 
 ## Challenges and Mitigation Strategies
 
-- Optional dependency handling: Use `requiresOptionalDependency` to avoid bundling when dependencies absent.
-- Multi-environment compatibility (Node, Edge, Browser, Deno): Use environment tests (`environment_tests/` + `yarn test:exports:docker`) to validate export forms (ESM/CJS) and platform-specific execution.
-- API parity with Python: Review Python implementation before introducing divergent abstractions; open issue for discussion first.
+- **Environment breadth**: LangChain.js must run across Node ESM/CJS, edge runtimes, and browsers. Rely on environment tests (`pnpm test:exports:docker`) to validate builds across targets.
+- **Third-party dependency surface**: New integrations may require credentials or heavy dependencies. Gate them behind optional peer deps and provide `.env`-driven configuration for integration tests.
 
 ## Development Workflow
 
-### Install & Bootstrap
-
-```bash
-yarn                # installs all workspace dependencies (Yarn 3 PnP)
-```
-
-If contributing to core features that depend on `@langchain/core`, ensure it is built first when making local changes:
-
-```bash
-cd langchain-core
-yarn
-yarn build
-```
-
-### Common Root Scripts (`package.json`)
-
-```bash
-yarn build                     # turbo build (skips test-exports-* workspaces)
-yarn clean                     # turbo clean across workspaces
-yarn format                    # run Prettier formatting
-yarn lint:fix                  # run ESLint with --fix
-yarn test                      # unit tests + export environment tests via docker
-yarn test:unit                 # unit tests (filters out examples/docs/export tests)
-yarn test:int                  # spin up deps, run integration tests, tear down
-yarn test:exports:docker       # environment/export tests across JS runtimes
-yarn test:ranges:docker        # dependency range tests
-yarn docs                      # start core_docs site
-yarn docs:api_refs             # start api_refs site
-yarn example                   # run examples workspace start script
-```
-
-### Turborepo Task Graph Highlights (`turbo.json`)
-
-- `build` depends on upstream package `^build` tasks; outputs cached `dist/**`.
-- Testing tasks depend on `build` to ensure artifacts are compiled.
-- `test` task caching disabled (`"cache": false`).
-
-### Testing
-
-- Unit tests: `yarn test:unit` (Jest) — add `*.test.ts` alongside source.
-- Integration tests: `*.int.test.ts`; run selectively with `yarn test:int` (spins Docker services) or single test via workspace-level scripts (see CONTRIBUTING guidance for `yarn test:single`).
-- Environment/export tests: `yarn test:exports:docker` (validates multi-env compatibility & export shapes).
-- Dependency range tests: `yarn test:ranges:docker`.
-
-### Examples
-
-Add example under `examples/src/...` and invoke via root `yarn example path/to/example` (path relative to `examples/src`). Add required environment variables to `examples/.env` when needed.
-
-### Documentation
-
-- Generate/start docs: `yarn docs` (after `yarn`).
-- API refs: `yarn docs:api_refs`.
-- Notebook-based docs use Deno import conventions (`deno.json` governs import maps). Update import map when adding new runtime dependencies to notebooks.
-
-### Adding Entrypoints
-
-Modify `langchain/langchain.config.js` (or corresponding package config) adding the new key under `entrypoints`. If it requires an optional third-party dependency, also add its path to `requiresOptionalDependency`.
+- Install workspace deps: `pnpm install`
+- Build core packages before depending packages, e.g.:
+  - `cd libs/langchain-core && pnpm install && pnpm build`
+  - Return to repo root for aggregate builds: `pnpm build`
+- Run linting/formatting: `pnpm lint`, `pnpm lint:fix`, `pnpm format`, `pnpm format:check`
+- Run tests:
+  - Unit suite: `pnpm test` (alias for `pnpm test:unit` plus exports tests)
+  - Integration deps up/down: `pnpm test:int:deps`, `pnpm test:int`, `pnpm test:int:deps:down`
+  - Environment/exports matrix (Docker required): `pnpm test:exports:docker`
+  - Dependency range tests (Docker required): `pnpm test:ranges:docker`
+- Watch build utilities: `pnpm --filter @langchain/build watch`
+- Release a package (maintainers): `pnpm release <workspace>` run on a clean `main`
 
 ## Coding Guidelines
 
-- Maintain consistency with Python LangChain abstractions when possible; open an issue before introducing new abstractions.
-- Place integrations in `libs/langchain-community` unless a dedicated package is justified.
-- Provide tests (unit for pure logic; integration for external API calls) when adding features.
-- Provide TypeDoc-friendly JSDoc comments for public classes/methods to ensure documentation generation quality.
-- Keep formatting (`yarn format`) and lint (`yarn lint`) clean before submitting PRs.
+- Follow TypeScript strictness defined in package `tsconfig` files; prefer composable abstractions aligned with `@langchain/core`
+- Use Prettier (`.prettierrc`) and ESLint (`@langchain/eslint` presets) before submitting PRs
+- Add new public entrypoints in `langchain/langchain.config.js` or `libs/langchain-community/langchain.config.js`, and flag integrations requiring optional deps
+- Place tests alongside source (`tests/*.test.ts` for unit, `*.int.test.ts` for integration)
 
 ## Pull Request Guidelines
 
-- Use fork & pull request workflow; do not push directly unless maintainer (per `CONTRIBUTING.md`).
-- Assign yourself to issues you are implementing; keep issues focused on a single bug/feature.
-- For new abstractions or sizable design changes: open an issue first for discussion.
-- Include/extend tests relevant to changes (unit or integration). Provide environment variable setup guidance if adding integration tests.
-- Add or update documentation & examples where helpful (especially for new integrations or major features).
-- Ensure lint, format, build, and tests pass locally before submission.
+- Fork-and-PR workflow only; do not push directly to upstream unless you are a maintainer
+- Assign yourself to issues you are addressing and keep scope focused
+- Discuss new abstractions or major API changes in an issue before implementation
+- Run linting, formatting, and relevant tests (unit, integration, exports) before requesting review; note any tests not run and why
 
-## Security Considerations
+## Debugging and Troubleshooting
 
-- Report vulnerabilities to: `security@langchain.dev` (per `SECURITY.md`).
-- Do not disclose security issues publicly before coordinated response.
-
-## Debugging & Troubleshooting
-
-- Build issues: Ensure `langchain-core` rebuilt if changing its exports before using dependent packages.
-- Missing integration imports: Confirm entrypoint added to `langchain.config.js` and (if optional) listed in `requiresOptionalDependency`.
-- Export/interop failures: Run `yarn test:exports:docker` to validate ESM/CJS and edge environment compatibility.
-- Failing integration tests: Verify required env vars (.env in relevant workspace) and that `test:int:deps` services are running.
-
-## Adding New Integrations (Key Points)
-
-- Place in `libs/langchain-community` or create a new `libs/<package>` if scope warrants.
-- Scaffold via `npx create-langchain-integration` (utility referenced in `CONTRIBUTING.md`).
-- After adding new integration package, update CI workflow (`unit-tests-integrations.yml`) `PACKAGES` env (manual step described).
-- Provide at least one integration test (`*.int.test.ts`) and relevant docs/examples.
+- Use `nvm use` or similar to ensure Node v24.x; mismatched Node versions often break dependency installation
+- If missing new core export in dependents, rebuild `libs/langchain-core` then rerun dependent build/tests
+- Docker must be running for `test:exports:docker`, `test:ranges:docker`, and integration dependencies
+- Integration tests may need provider credentials; place them in `langchain/.env` or `libs/<pkg>/.env` as referenced in test docs
+- If Turbo caches stale artifacts, clear with `pnpm clean` or remove `.turbo/` in the affected workspace
 
 ## Environment & Platform Support
 
 - Target runtimes: Node.js (CJS + ESM), Edge (Cloudflare Workers, Vercel Edge, Supabase Edge), Browser, Deno.
 - Ensure code avoids Node-only APIs unless guarded or documented; rely on abstractions in `@langchain/core` when possible.
-
-## Contact & Community
-
-- Issues: Bug reports & doc improvements on GitHub Issues; feature discussions primarily on LangChain Forum.
-- Forum: https://forum.langchain.com
